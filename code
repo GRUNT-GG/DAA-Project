@@ -1,0 +1,185 @@
+import tkinter as tk
+from tkinter import messagebox
+import heapq
+
+class ShortestPathVisualizer:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Shortest Path Visualizer (Dijkstra's Algorithm)")
+
+        self.canvas = tk.Canvas(root, width=900, height=600, bg="white")
+        self.canvas.pack()
+
+        self.start_var = tk.StringVar()
+        self.end_var = tk.StringVar()
+
+        control_frame = tk.Frame(root)
+        control_frame.pack(pady=10)
+
+        tk.Label(control_frame, text="Start:").pack(side=tk.LEFT)
+        self.start_menu = tk.OptionMenu(control_frame, self.start_var, '')
+        self.start_menu.pack(side=tk.LEFT)
+
+        tk.Label(control_frame, text="End:").pack(side=tk.LEFT)
+        self.end_menu = tk.OptionMenu(control_frame, self.end_var, '')
+        self.end_menu.pack(side=tk.LEFT)
+
+        tk.Button(control_frame, text="Find Path", command=self.find_path).pack(side=tk.LEFT, padx=10)
+        tk.Button(control_frame, text="Next Map", command=self.next_map).pack(side=tk.LEFT)
+
+        self.map_index = 0
+        self.maps = self.load_maps()
+        self.load_current_map()
+
+    def create_map(self, name, cities, roads):
+        city_coords = {name: (x, y) for name, x, y in cities}
+        graph = {name: [] for name, _, _ in cities}
+        for city1, city2, dist in roads:
+            graph[city1].append((city2, dist))
+            graph[city2].append((city1, dist))
+        return {"name": name, "coords": city_coords, "graph": graph}
+
+    def load_maps(self):
+        return [
+            self.create_map("Uttar Pradesh", [
+                ("Lucknow", 450, 200), ("Kanpur", 400, 250), ("Varanasi", 600, 250), ("Agra", 300, 300),
+                ("Meerut", 250, 150), ("Allahabad", 550, 300), ("Gorakhpur", 650, 200), ("Jhansi", 320, 350),
+                ("Noida", 260, 130), ("Bareilly", 350, 180), ("Aligarh", 290, 270), ("Moradabad", 330, 160),
+                ("Ayodhya", 500, 220)
+            ], [
+                ("Lucknow", "Kanpur", 82), ("Lucknow", "Varanasi", 280), ("Kanpur", "Jhansi", 220),
+                ("Varanasi", "Allahabad", 120), ("Allahabad", "Jhansi", 280), ("Agra", "Jhansi", 235),
+                ("Agra", "Meerut", 233), ("Meerut", "Noida", 60), ("Noida", "Aligarh", 90),
+                ("Aligarh", "Agra", 80), ("Lucknow", "Ayodhya", 135), ("Ayodhya", "Gorakhpur", 150),
+                ("Bareilly", "Lucknow", 270), ("Moradabad", "Bareilly", 100), ("Moradabad", "Meerut", 120)
+            ]),
+            self.create_map("Madhya Pradesh", [
+                ("Bhopal", 450, 250), ("Indore", 400, 300), ("Jabalpur", 600, 220), ("Gwalior", 300, 180),
+                ("Ujjain", 380, 280), ("Sagar", 520, 240), ("Rewa", 630, 200), ("Ratlam", 350, 290),
+                ("Satna", 590, 210), ("Dewas", 420, 280), ("Chhindwara", 550, 270), ("Sehore", 440, 260),
+                ("Hoshangabad", 470, 280)
+            ], [
+                ("Bhopal", "Indore", 200), ("Bhopal", "Jabalpur", 315), ("Indore", "Ujjain", 55),
+                ("Ujjain", "Ratlam", 90), ("Ratlam", "Gwalior", 400), ("Bhopal", "Sehore", 25),
+                ("Sehore", "Hoshangabad", 60), ("Bhopal", "Sagar", 170), ("Sagar", "Satna", 150),
+                ("Satna", "Rewa", 50), ("Rewa", "Jabalpur", 220), ("Chhindwara", "Jabalpur", 200),
+                ("Chhindwara", "Hoshangabad", 130)
+            ]),
+            self.create_map("Maharashtra", [
+                ("Mumbai", 200, 300), ("Pune", 250, 320), ("Nagpur", 700, 250), ("Nashik", 240, 250),
+                ("Aurangabad", 400, 300), ("Solapur", 330, 370), ("Amravati", 650, 220), ("Thane", 220, 290),
+                ("Kolhapur", 270, 400), ("Satara", 290, 350), ("Akola", 600, 240), ("Latur", 420, 350),
+                ("Sangli", 280, 390)
+            ], [
+                ("Mumbai", "Thane", 23), ("Thane", "Nashik", 170), ("Nashik", "Aurangabad", 180),
+                ("Aurangabad", "Nagpur", 490), ("Nagpur", "Amravati", 150), ("Amravati", "Akola", 100),
+                ("Akola", "Aurangabad", 250), ("Aurangabad", "Latur", 230), ("Latur", "Solapur", 110),
+                ("Solapur", "Kolhapur", 200), ("Kolhapur", "Sangli", 40), ("Sangli", "Satara", 120),
+                ("Satara", "Pune", 110), ("Pune", "Mumbai", 150)
+            ]),
+            self.create_map("Bihar", [
+                ("Patna", 400, 200), ("Gaya", 430, 270), ("Bhagalpur", 550, 200), ("Muzaffarpur", 420, 150),
+                ("Purnia", 600, 150), ("Darbhanga", 450, 130), ("Ara", 380, 230), ("Buxar", 350, 240),
+                ("Chapra", 370, 210), ("Motihari", 440, 100), ("Nalanda", 410, 240), ("Katihar", 580, 170),
+                ("Samastipur", 440, 160)
+            ], [
+                ("Patna", "Gaya", 100), ("Patna", "Muzaffarpur", 80), ("Muzaffarpur", "Darbhanga", 40),
+                ("Darbhanga", "Samastipur", 30), ("Samastipur", "Bhagalpur", 150), ("Patna", "Ara", 40),
+                ("Ara", "Buxar", 50), ("Chapra", "Patna", 70), ("Motihari", "Muzaffarpur", 80),
+                ("Motihari", "Darbhanga", 90), ("Nalanda", "Gaya", 90), ("Katihar", "Purnia", 35),
+                ("Purnia", "Bhagalpur", 130)
+            ]),
+            self.create_map("Rajasthan", [
+                ("Jaipur", 400, 200), ("Jodhpur", 300, 250), ("Udaipur", 350, 350), ("Kota", 450, 300),
+                ("Ajmer", 380, 250), ("Bikaner", 250, 180), ("Alwar", 420, 150), ("Bharatpur", 460, 170),
+                ("Sikar", 370, 180), ("Chittorgarh", 370, 330), ("Barmer", 200, 300), ("Pali", 310, 280),
+                ("Tonk", 410, 270)
+            ], [
+                ("Jaipur", "Ajmer", 130), ("Ajmer", "Jodhpur", 200), ("Jodhpur", "Barmer", 200),
+                ("Barmer", "Pali", 160), ("Pali", "Udaipur", 180), ("Udaipur", "Chittorgarh", 115),
+                ("Chittorgarh", "Kota", 120), ("Kota", "Tonk", 100), ("Tonk", "Jaipur", 95),
+                ("Jaipur", "Alwar", 150), ("Alwar", "Bharatpur", 65), ("Jaipur", "Sikar", 100),
+                ("Bikaner", "Jodhpur", 250)
+            ])
+        ]
+
+    def load_current_map(self):
+        self.canvas.delete("all")
+        self.current_map = self.maps[self.map_index]
+        self.draw_map()
+        self.update_dropdowns()
+
+    def draw_map(self):
+        coords = self.current_map["coords"]
+        graph = self.current_map["graph"]
+        for city, (x, y) in coords.items():
+            self.canvas.create_oval(x-5, y-5, x+5, y+5, fill="blue")
+            self.canvas.create_text(x, y-10, text=city, font=("Arial", 8), anchor=tk.S)
+        for city, neighbors in graph.items():
+            for neighbor, _ in neighbors:
+                x1, y1 = coords[city]
+                x2, y2 = coords[neighbor]
+                self.canvas.create_line(x1, y1, x2, y2, fill="gray", dash=(2, 2))
+
+    def update_dropdowns(self):
+        menu1 = self.start_menu["menu"]
+        menu2 = self.end_menu["menu"]
+        menu1.delete(0, "end")
+        menu2.delete(0, "end")
+        for city in self.current_map["coords"].keys():
+            menu1.add_command(label=city, command=lambda value=city: self.start_var.set(value))
+            menu2.add_command(label=city, command=lambda value=city: self.end_var.set(value))
+        self.start_var.set('')
+        self.end_var.set('')
+
+    def next_map(self):
+        self.map_index = (self.map_index + 1) % len(self.maps)
+        self.load_current_map()
+
+    def find_path(self):
+        start = self.start_var.get()
+        end = self.end_var.get()
+        if not start or not end:
+            messagebox.showwarning("Input Required", "Please select both start and end cities.")
+            return
+
+        graph = self.current_map["graph"]
+        coords = self.current_map["coords"]
+        distances = {city: float('inf') for city in graph}
+        distances[start] = 0
+        prev = {}
+        queue = [(0, start)]
+
+        while queue:
+            current_dist, current_city = heapq.heappop(queue)
+            if current_city == end:
+                break
+            for neighbor, weight in graph[current_city]:
+                new_dist = current_dist + weight
+                if new_dist < distances[neighbor]:
+                    distances[neighbor] = new_dist
+                    prev[neighbor] = current_city
+                    heapq.heappush(queue, (new_dist, neighbor))
+
+        if end not in prev and start != end:
+            messagebox.showinfo("No Path", f"No path exists between {start} and {end}.")
+            return
+
+        path = [end]
+        while path[-1] != start:
+            path.append(prev[path[-1]])
+        path.reverse()
+
+        self.draw_map()
+        for i in range(len(path)-1):
+            x1, y1 = coords[path[i]]
+            x2, y2 = coords[path[i+1]]
+            self.canvas.create_line(x1, y1, x2, y2, fill="red", width=3)
+
+        messagebox.showinfo("Shortest Path",
+                            f"Path: {' -> '.join(path)}\nTotal Distance: {distances[end]} km")
+
+# Run the App
+root = tk.Tk()
+app = ShortestPathVisualizer(root)
+root.mainloop()
